@@ -33,6 +33,7 @@ function App() {
   const [editingSale, setEditingSale] = useState(null)
   const [deleteSaleTarget, setDeleteSaleTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [salesDateFilter, setSalesDateFilter] = useState('all')
   const [toast, setToast] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -174,10 +175,15 @@ function App() {
     return total
   }, { value: 0, potential: 0, margin: 0 }), [products])
   const today = new Date().toISOString().slice(0, 10)
-  const daily = useMemo(() => sales.filter((sale) => sale.sold_at === today).reduce((total, sale) => {
+  const filteredSales = useMemo(() => {
+    const list = [...sales].sort((a, b) => new Date(b.sold_at) - new Date(a.sold_at))
+    if (salesDateFilter === 'all') return list
+    return list.filter((sale) => sale.sold_at === salesDateFilter)
+  }, [sales, salesDateFilter])
+  const daily = useMemo(() => filteredSales.reduce((total, sale) => {
     const prices = sale.unit_prices?.length ? sale.unit_prices.map(Number) : Array.from({ length: Number(sale.quantity) }, () => Number(sale.unit_price))
     total.items += Number(sale.quantity); total.revenue += prices.reduce((sum, price) => sum + price, 0); total.profit += prices.reduce((sum, price) => sum + price - Number(sale.unit_cost), 0); return total
-  }, { items: 0, revenue: 0, profit: 0 }), [sales, today])
+  }, { items: 0, revenue: 0, profit: 0 }), [filteredSales])
 
   if (!isSupabaseConfigured) return <SetupNotice />
   if (loading && !session) return <div className="grid min-h-screen place-items-center bg-slate-50 text-slate-500">Loading Fashion Corner…</div>
@@ -192,8 +198,8 @@ function App() {
       <div className="flex flex-col gap-6 px-4 py-7 sm:px-6 lg:block lg:pl-64 lg:pr-8">
         <aside className="shrink-0 lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:w-60 lg:border-r lg:border-slate-200 lg:bg-white lg:pt-20"><div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm lg:min-h-full lg:rounded-none lg:border-0 lg:shadow-none"><p className="px-3 pb-2 text-xs font-bold tracking-wider text-slate-400 uppercase">Dashboard</p><button onClick={() => setActiveView('inventory')} className={`mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm font-medium ${activeView === 'inventory' ? 'bg-rose-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><span>Inventory</span><span className="text-xs opacity-75">{products.length}</span></button><button onClick={() => setActiveView('sales')} className={`mb-4 flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm font-medium ${activeView === 'sales' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}><span>Daily sales</span><span className="text-xs opacity-75">{daily.items}</span></button><p className="border-t border-slate-100 px-3 pt-4 pb-2 text-xs font-bold tracking-wider text-slate-400 uppercase">Categories</p>{['all', 'Shirts', 'T-shirts', 'Jeans', 'Shoes'].map((item) => <button key={item} onClick={() => { setActiveView('inventory'); setActiveCategory(item); setCategory('all') }} className={`mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm font-medium ${activeView === 'inventory' && activeCategory === item ? 'bg-rose-50 text-rose-700' : 'text-slate-600 hover:bg-slate-100'}`}><span>{item === 'all' ? 'All products' : item}</span><span className="text-xs opacity-75">{item === 'all' ? products.length : products.filter((p) => p.category.toLowerCase() === item.toLowerCase()).length}</span></button>)}</div></aside>
         <main className="min-w-0 flex-1 lg:mx-auto lg:max-w-none">
-        <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><h2 className="text-2xl font-bold tracking-tight">{activeView === 'sales' ? 'Daily sales dashboard' : activeCategory === 'all' ? 'Inventory dashboard' : activeCategory}</h2><p className="mt-1 text-sm text-slate-500">{activeView === 'sales' ? 'Track every sale, today’s revenue, and profit.' : 'Manage your stock, categories, and product margins.'}</p></div><div className="flex gap-2">{activeView === 'sales' ? <button onClick={openSale} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">+ Record sale</button> : <button onClick={openCreate} className="rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-rose-700">+ Add product</button>}</div></div>
-        {activeView === 'sales' ? <ReadableSalesDashboard daily={daily} sales={sales} today={today} onEdit={openSaleEdit} onDelete={setDeleteSaleTarget} /> : <>
+        <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><h2 className="text-2xl font-bold tracking-tight">{activeView === 'sales' ? 'Sales dashboard' : activeCategory === 'all' ? 'Inventory dashboard' : activeCategory}</h2><p className="mt-1 text-sm text-slate-500">{activeView === 'sales' ? 'Track all sales history and filter by date to review previous days.' : 'Manage your stock, categories, and product margins.'}</p></div><div className="flex gap-2">{activeView === 'sales' ? <button onClick={openSale} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">+ Record sale</button> : <button onClick={openCreate} className="rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-rose-700">+ Add product</button>}</div></div>
+        {activeView === 'sales' ? <ReadableSalesDashboard daily={daily} sales={filteredSales} today={today} selectedDate={salesDateFilter} onDateChange={setSalesDateFilter} onEdit={openSaleEdit} onDelete={setDeleteSaleTarget} /> : <>
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Stat label="Total products" value={products.length} hint="Unique items in your catalog" />
           <Stat label="Inventory value" value={formatMoney(summary.value)} hint="At cost price" />
@@ -263,9 +269,46 @@ function FlexibleSaleForm({ products, form, setForm, editing, onClose, onSubmit,
   return <Dialog><div className="flex items-center justify-between"><div><h2 className="text-lg font-bold">{editing ? 'Edit daily sale' : 'Record daily sale'}</h2><p className="mt-1 text-sm text-slate-500">Enter a separate amount for each unit sold.</p></div><button onClick={onClose} className="text-xl text-slate-400 hover:text-slate-800">×</button></div><form onSubmit={onSubmit} className="mt-5 space-y-4"><label className="block text-sm font-medium text-slate-700">Product<select required disabled={Boolean(editing)} value={form.product_id} onChange={(e) => { const product = products.find((item) => item.id === e.target.value); setForm({ ...form, product_id: e.target.value, amounts: Array.from({ length: quantity }, () => product?.selling_price ?? '') }) }} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-emerald-500 disabled:bg-slate-100"><option value="">Choose a product</option>{products.filter((p) => p.quantity > 0 || p.id === editing?.product_id).map((p) => <option key={p.id} value={p.id}>{p.name} · {p.category} · {p.quantity} in stock</option>)}</select></label><Field label="Units sold" name="quantity" type="number" min="1" max={editing ? undefined : selected?.quantity} value={form.quantity} onChange={(e) => setQuantity(e.target.value)} required />{selected && <div className="space-y-2 rounded-lg bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">Selling amount for each unit</p>{amounts.map((amount, index) => <Field key={index} label={`Unit ${index + 1}`} type="number" min="0" step="0.01" value={amount} onChange={(e) => setForm({ ...form, amounts: form.amounts.map((current, amountIndex) => amountIndex === index ? e.target.value : current) })} required />)}</div>}<Field label="Sale date" name="sold_at" type="date" value={form.sold_at} onChange={(e) => setForm({ ...form, sold_at: e.target.value })} required />{selected && <div className="grid grid-cols-2 gap-2 rounded-lg bg-emerald-50 p-3 text-center text-xs"><div><p className="text-emerald-700">Sales total</p><b>{formatMoney(total)}</b></div><div><p className="text-emerald-700">Profit</p><b>{formatMoney(profit)}</b></div></div>}<div className="flex justify-end gap-3 pt-2"><button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600">Cancel</button><button disabled={submitting || !selected} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">{submitting && <Spinner />}{submitting ? 'Saving…' : editing ? 'Save changes' : 'Record sale'}</button></div></form></Dialog>
 }
 
-function ReadableSalesDashboard({ daily, sales, today, onEdit, onDelete }) {
-  const todaySales = sales.filter((sale) => sale.sold_at === today)
-  return <><section className="grid gap-4 sm:grid-cols-3"><Stat label="Items sold today" value={daily.items} hint="Units sold" /><Stat label="Sales today" value={formatMoney(daily.revenue)} hint="Selling value" /><Stat label="Profit today" value={formatMoney(daily.profit)} hint="After cost price" accent /></section><section className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-200 p-4"><h2 className="font-semibold">Today’s sale record</h2><p className="mt-1 text-sm text-slate-500">Each amount is shown against its unit number.</p></div><div className="overflow-x-auto"><table className="w-full min-w-[940px] text-left text-sm"><thead className="bg-slate-50 text-xs tracking-wide text-slate-500 uppercase"><tr>{['Product', 'Category', 'Units', 'Unit amounts', 'Sales value', 'Profit', 'Date', 'Actions'].map((head) => <th key={head} className="px-4 py-3 font-semibold">{head}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{todaySales.length === 0 ? <tr><td colSpan="8" className="px-4 py-12 text-center text-slate-500">No sales recorded today. Click “Record sale” to add one.</td></tr> : todaySales.map((sale) => { const prices = salePrices(sale); const total = prices.reduce((sum, price) => sum + price, 0); const profit = prices.reduce((sum, price) => sum + price - Number(sale.unit_cost), 0); return <tr key={sale.id} className="align-top"><td className="px-4 py-3 font-medium">{sale.product?.name ?? 'Deleted product'}</td><td className="px-4 py-3 text-slate-600">{sale.product?.category ?? '—'}</td><td className="px-4 py-3 font-semibold">{sale.quantity}</td><td className="px-4 py-3"><div className="max-h-20 min-w-[180px] overflow-y-auto pr-1"><div className="grid grid-cols-2 gap-1">{prices.map((price, index) => <span key={`${sale.id}-${index}`} className="rounded bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800" title={`Unit ${index + 1}`}>#{index + 1} {formatMoney(price)}</span>)}</div></div></td><td className="px-4 py-3 font-medium">{formatMoney(total)}</td><td className="px-4 py-3 font-medium text-emerald-600">{formatMoney(profit)}</td><td className="px-4 py-3 text-slate-600">{sale.sold_at}</td><td className="px-4 py-3 whitespace-nowrap"><button onClick={() => onEdit(sale)} className="mr-3 font-medium text-slate-700 hover:text-emerald-700">Edit</button><button onClick={() => onDelete(sale)} className="font-medium text-red-600 hover:text-red-800">Delete</button></td></tr> })}</tbody></table></div></section></>
+function ReadableSalesDashboard({ daily, sales, today, selectedDate, onDateChange, onEdit, onDelete }) {
+  const label = selectedDate === 'all' ? 'All sales history' : `Sales for ${selectedDate}`
+  const dateInputValue = selectedDate === 'all' ? '' : selectedDate
+
+  return <>
+    <div className="mb-5 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+      <div>
+        <p className="text-xs font-bold tracking-[.18em] text-emerald-600 uppercase">Sales filter</p>
+        <h3 className="mt-1 text-lg font-semibold">{label}</h3>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={() => onDateChange('all')} className={`rounded-lg px-3 py-2 text-sm font-medium ${selectedDate === 'all' ? 'bg-emerald-600 text-white' : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}>
+          All dates
+        </button>
+        <input type="date" value={dateInputValue} max={today} onChange={(e) => onDateChange(e.target.value || 'all')} className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-500" />
+      </div>
+    </div>
+
+    <section className="grid gap-4 sm:grid-cols-3">
+      <Stat label={selectedDate === 'all' ? 'Items sold' : `Items sold on ${selectedDate}`} value={daily.items} hint="Units sold" />
+      <Stat label={selectedDate === 'all' ? 'Sales value' : `Sales value on ${selectedDate}`} value={formatMoney(daily.revenue)} hint="Selling value" />
+      <Stat label={selectedDate === 'all' ? 'Profit' : `Profit on ${selectedDate}`} value={formatMoney(daily.profit)} hint="After cost price" accent />
+    </section>
+
+    <section className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-200 p-4">
+        <h2 className="font-semibold">{selectedDate === 'all' ? 'All sales record' : `Sales for ${selectedDate}`}</h2>
+        <p className="mt-1 text-sm text-slate-500">Each amount is shown against its unit number. Use the date filter to review any previous day.</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[940px] text-left text-sm">
+          <thead className="bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">
+            <tr>{['Product', 'Category', 'Units', 'Unit amounts', 'Sales value', 'Profit', 'Date', 'Actions'].map((head) => <th key={head} className="px-4 py-3 font-semibold">{head}</th>)}</tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">{sales.length === 0 ? <tr><td colSpan="8" className="px-4 py-12 text-center text-slate-500">No sales match this date. Try another date or choose “All dates”.</td></tr> : sales.map((sale) => { const prices = salePrices(sale); const total = prices.reduce((sum, price) => sum + price, 0); const profit = prices.reduce((sum, price) => sum + price - Number(sale.unit_cost), 0); return <tr key={sale.id} className="align-top"><td className="px-4 py-3 font-medium">{sale.product?.name ?? 'Deleted product'}</td><td className="px-4 py-3 text-slate-600">{sale.product?.category ?? '—'}</td><td className="px-4 py-3 font-semibold">{sale.quantity}</td><td className="px-4 py-3"><div className="max-h-20 min-w-[180px] overflow-y-auto pr-1"><div className="grid grid-cols-2 gap-1">{prices.map((price, index) => <span key={`${sale.id}-${index}`} className="rounded bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800" title={`Unit ${index + 1}`}>#{index + 1} {formatMoney(price)}</span>)}</div></div></td><td className="px-4 py-3 font-medium">{formatMoney(total)}</td><td className="px-4 py-3 font-medium text-emerald-600">{formatMoney(profit)}</td><td className="px-4 py-3 text-slate-600">{sale.sold_at}</td><td className="px-4 py-3 whitespace-nowrap"><button onClick={() => onEdit(sale)} className="mr-3 font-medium text-slate-700 hover:text-emerald-700">Edit</button><button onClick={() => onDelete(sale)} className="font-medium text-red-600 hover:text-red-800">Delete</button></td></tr> })}</tbody>
+        </table>
+      </div>
+    </section>
+  </>
 }
+
 
 export default App
